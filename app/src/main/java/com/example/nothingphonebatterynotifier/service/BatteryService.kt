@@ -11,7 +11,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.IBinder
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.nothingphonebatterynotifier.data.ProfileRepository
 import com.example.nothingphonebatterynotifier.glyph.GlyphManager
@@ -36,7 +35,12 @@ class BatteryService : Service() {
                 val batteryPct = (level * 100 / scale.toFloat()).toInt()
                 if (batteryPct != currentLevel) {
                     currentLevel = batteryPct
-                    if (!isTesting) evaluateProfiles()
+                    if (!isTesting) {
+                        serviceScope.launch {
+                            val profiles = profileRepository.profilesFlow.first()
+                            evaluateProfiles(profiles)
+                        }
+                    }
                 }
             }
         }
@@ -61,7 +65,10 @@ class BatteryService : Service() {
             val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
             if (level != -1 && scale != -1) {
                 currentLevel = (level * 100 / scale.toFloat()).toInt()
-                evaluateProfiles()
+                serviceScope.launch {
+                    val profiles = profileRepository.profilesFlow.first()
+                    evaluateProfiles(profiles)
+                }
             }
         }
     }
@@ -84,11 +91,8 @@ class BatteryService : Service() {
         serviceScope.launch {
             isTesting = true
             stopBlinking()
-            
             glyphManager.previewBlink(count, duration, gap, this)
-            
             isTesting = false
-            // Re-evaluate current profiles after preview finishes
             val profiles = profileRepository.profilesFlow.first()
             evaluateProfiles(profiles)
         }
@@ -98,17 +102,15 @@ class BatteryService : Service() {
         serviceScope.launch {
             isTesting = true
             stopBlinking()
-            
-            // Pulse the red LED twice to confirm operation
             repeat(2) {
                 glyphManager.toggleRedLed(true)
                 delay(500)
                 glyphManager.toggleRedLed(false)
                 delay(200)
             }
-            
             isTesting = false
-            evaluateProfiles()
+            val profiles = profileRepository.profilesFlow.first()
+            evaluateProfiles(profiles)
         }
     }
 
@@ -132,13 +134,7 @@ class BatteryService : Service() {
         } else {
             stopBlinking()
         }
-        
         updateNotification()
-    }
-
-    private fun updateNotification() {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, createNotification())
     }
 
     private fun updateNotification() {
@@ -176,9 +172,7 @@ class BatteryService : Service() {
     override fun onDestroy() {
         try {
             unregisterReceiver(batteryReceiver)
-        } catch (e: Exception) {
-            // Already unregistered or not registered
-        }
+        } catch (e: Exception) {}
         stopBlinking()
         glyphManager.release()
         serviceScope.cancel()
@@ -196,12 +190,8 @@ class BatteryService : Service() {
     }
 
     private fun createNotification(): Notification {
-        val stopIntent = Intent(this, BatteryService::class.java).apply {
-            action = ACTION_STOP_SERVICE
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this, 0, stopIntent, PendingIntent.FLAG_IMMUTABLE
-        )
+        val stopIntent = Intent(this, BatteryService::class.java).apply { action = ACTION_STOP_SERVICE }
+        val stopPendingIntent = PendingIntent.getService(this, 0, stopIntent, PendingIntent.FLAG_IMMUTABLE)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Glyph Battery Notifier")
