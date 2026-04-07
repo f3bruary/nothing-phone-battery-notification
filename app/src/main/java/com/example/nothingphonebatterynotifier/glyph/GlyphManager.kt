@@ -34,15 +34,6 @@ class GlyphManager(private val context: Context) {
     }
 
     fun toggleRedLed(on: Boolean) {
-        if (!on) {
-            try {
-                glyphManager?.turnOff()
-            } catch (e: Exception) {
-                Log.e("GlyphManager", "Turn off error", e)
-            }
-            return
-        }
-
         try {
             val managerClass = glyphManager?.javaClass
             val setFrameColors = managerClass?.methods?.find { 
@@ -52,9 +43,17 @@ class GlyphManager(private val context: Context) {
             if (setFrameColors != null) {
                 // The undocumented 7-element array for Phone 2a Red LED (Index 6)
                 val colors = IntArray(7) { 0 }
-                colors[6] = 255 
+                if (on) colors[6] = 255 
                 setFrameColors.invoke(glyphManager, colors)
             } else {
+                if (!on) {
+                    try {
+                        glyphManager?.turnOff()
+                    } catch (e: Exception) {
+                        Log.e("GlyphManager", "Turn off error", e)
+                    }
+                    return
+                }
                 // Fallback attempt for different SDK versions
                 val builder = glyphManager?.glyphFrameBuilder
                 val buildChannel = try {
@@ -79,22 +78,19 @@ class GlyphManager(private val context: Context) {
     }
 
     /**
-     * Executes a single blink pattern cycle once for preview purposes.
+     * Executes a single blink pattern cycle once.
      */
-    fun previewBlink(
+    suspend fun previewBlink(
         repeatCount: Int,
         blinkDurationMs: Long,
-        blinkGapMs: Long,
-        scope: CoroutineScope
+        blinkGapMs: Long
     ) {
-        scope.launch {
-            for (i in 0 until repeatCount) {
-                toggleRedLed(true)
-                delay(blinkDurationMs)
-                toggleRedLed(false)
-                if (i < repeatCount - 1) {
-                    delay(blinkGapMs)
-                }
+        for (i in 0 until repeatCount) {
+            toggleRedLed(true)
+            delay(blinkDurationMs)
+            toggleRedLed(false)
+            if (i < repeatCount - 1) {
+                delay(blinkGapMs)
             }
         }
     }

@@ -25,7 +25,7 @@ class BatteryService : Service() {
     private var blinkJob: Job? = null
     private var currentLevel: Int = 100
     private var isTesting = false
-    private var currentBlinkingProfileId: String? = null
+    private var activeProfile: GlyphProfile? = null
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -90,11 +90,19 @@ class BatteryService : Service() {
     private fun runPreview(count: Int, duration: Long, gap: Long) {
         serviceScope.launch {
             isTesting = true
+            val wasBlinking = blinkJob != null
+            val previousProfile = activeProfile
+            
             stopBlinking()
-            glyphManager.previewBlink(count, duration, gap, this)
+            glyphManager.previewBlink(count, duration, gap)
+            
             isTesting = false
-            val profiles = profileRepository.profilesFlow.first()
-            evaluateProfiles(profiles)
+            if (wasBlinking && previousProfile != null) {
+                startBlinking(previousProfile)
+            } else {
+                val profiles = profileRepository.profilesFlow.first()
+                evaluateProfiles(profiles)
+            }
         }
     }
 
@@ -123,15 +131,18 @@ class BatteryService : Service() {
     }
 
     private fun evaluateProfiles(profiles: List<GlyphProfile>) {
-        val activeProfile = profiles
+        val nextProfile = profiles
             .filter { it.enabled && currentLevel <= it.batteryThreshold }
             .minByOrNull { it.batteryThreshold }
 
-        if (activeProfile != null) {
-            if (currentBlinkingProfileId != activeProfile.id) {
-                startBlinking(activeProfile)
+        if (nextProfile != null) {
+            // Check if profile changed or values within profile changed
+            if (activeProfile != nextProfile) {
+                activeProfile = nextProfile
+                startBlinking(nextProfile)
             }
         } else {
+            activeProfile = null
             stopBlinking()
         }
         updateNotification()
@@ -144,7 +155,6 @@ class BatteryService : Service() {
 
     private fun startBlinking(profile: GlyphProfile) {
         blinkJob?.cancel()
-        currentBlinkingProfileId = profile.id
         blinkJob = serviceScope.launch {
             while (isActive) {
                 repeat(profile.repeatCount) {
@@ -163,7 +173,6 @@ class BatteryService : Service() {
     private fun stopBlinking() {
         blinkJob?.cancel()
         blinkJob = null
-        currentBlinkingProfileId = null
         glyphManager.toggleRedLed(false)
     }
 

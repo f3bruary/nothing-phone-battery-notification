@@ -1,21 +1,27 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Gson specific rules
+# Preserve all generic signatures and annotations
+-keepattributes Signature, InnerClasses, EnclosingMethod, *Annotation*
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep Gson's own classes
+-keep class com.google.gson.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep all subclasses of TypeToken, specifically for anonymous inner classes
+# used for generic type capture.
+-keep class * extends com.google.gson.reflect.TypeToken
+-keepclassmembers class * extends com.google.gson.reflect.TypeToken { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep our data models and their fields so Gson can map them
+-keep class com.example.nothingphonebatterynotifier.model.** { *; }
+-keepclassmembers class com.example.nothingphonebatterynotifier.model.** { *; }
+
+# Keep the Nothing Glyph SDK
+-keep class com.nothing.ketchum.** { *; }
+-keep interface com.nothing.ketchum.** { *; }
+
+# Preserve reflection for the Glyph Manager
+-keepclassmembers class com.example.nothingphonebatterynotifier.glyph.GlyphManager {
+    public void toggleRedLed(boolean);
+}
+
+# Optional: keep line numbers for better crash reports
+-keepattributes SourceFile, LineNumberTable
