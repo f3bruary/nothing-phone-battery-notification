@@ -2,6 +2,8 @@
 
 A lightweight, robust background service for the Nothing Phone (4a) that repurposes the unique red Glyph LED to provide customizable battery level notifications.
 
+<img width="1024" height="1024" alt="Untitled design" src="https://github.com/user-attachments/assets/c7728688-a3ab-4860-90ff-49068b28b3c0" />
+
 ## 🎯 The Goal
 
 Standard battery notifications are often easy to miss or require turning on the screen. This app utilizes the Phone (4a)'s undocumented red LED to give you a persistent, ambient visual cue when your battery drops below specific thresholds, allowing you to monitor your power status without ever touching your phone.
