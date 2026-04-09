@@ -293,14 +293,7 @@ fun EditProfileDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val glyphManager = remember { GlyphManager(context).apply { init() } }
     
-    DisposableEffect(Unit) {
-        onDispose {
-            glyphManager.release()
-        }
-    }
-
     var name by remember { mutableStateOf(profile?.name ?: "") }
     var threshold by remember { mutableStateOf(profile?.batteryThreshold?.toString() ?: "20") }
     var duration by remember { mutableStateOf(profile?.blinkDurationMs?.toString() ?: "100") }

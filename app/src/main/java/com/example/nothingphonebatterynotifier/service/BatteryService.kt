@@ -24,6 +24,7 @@ class BatteryService : Service() {
     private lateinit var glyphManager: GlyphManager
     private var blinkJob: Job? = null
     private var currentLevel: Int = 100
+    private var isCharging: Boolean = false
     private var isTesting = false
     private var activeProfile: GlyphProfile? = null
 
@@ -31,10 +32,16 @@ class BatteryService : Service() {
         override fun onReceive(context: Context, intent: Intent) {
             val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            
             if (level != -1 && scale != -1) {
                 val batteryPct = (level * 100 / scale.toFloat()).toInt()
-                if (batteryPct != currentLevel) {
+                val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || 
+                               status == BatteryManager.BATTERY_STATUS_FULL
+                
+                if (batteryPct != currentLevel || charging != isCharging) {
                     currentLevel = batteryPct
+                    isCharging = charging
                     if (!isTesting) {
                         serviceScope.launch {
                             val profiles = profileRepository.profilesFlow.first()
@@ -63,8 +70,11 @@ class BatteryService : Service() {
         batteryStatus?.let { intent ->
             val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
             if (level != -1 && scale != -1) {
                 currentLevel = (level * 100 / scale.toFloat()).toInt()
+                isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || 
+                             status == BatteryManager.BATTERY_STATUS_FULL
                 serviceScope.launch {
                     val profiles = profileRepository.profilesFlow.first()
                     evaluateProfiles(profiles)
@@ -89,17 +99,12 @@ class BatteryService : Service() {
 
     private fun runPreview(count: Int, duration: Long, gap: Long) {
         serviceScope.launch {
-            isTesting = true
-            val wasBlinking = blinkJob != null
-            val previousProfile = activeProfile
-            
-            stopBlinking()
-            glyphManager.previewBlink(count, duration, gap)
-            
-            isTesting = false
-            if (wasBlinking && previousProfile != null) {
-                startBlinking(previousProfile)
-            } else {
+            try {
+                isTesting = true
+                stopBlinking()
+                glyphManager.previewBlink(count, duration, gap)
+            } finally {
+                isTesting = false
                 val profiles = profileRepository.profilesFlow.first()
                 evaluateProfiles(profiles)
             }
@@ -131,7 +136,7 @@ class BatteryService : Service() {
     }
 
     private fun evaluateProfiles(profiles: List<GlyphProfile>) {
-        val nextProfile = profiles
+        val nextProfile = if (isCharging) null else profiles
             .filter { it.enabled && currentLevel <= it.batteryThreshold }
             .minByOrNull { it.batteryThreshold }
 
