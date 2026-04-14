@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.example.nothingphonebatterynotifier.data.ProfileRepository
 import com.example.nothingphonebatterynotifier.glyph.GlyphManager
@@ -27,6 +28,7 @@ class BatteryService : Service() {
     private var isCharging: Boolean = false
     private var isTesting = false
     private var activeProfile: GlyphProfile? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -160,6 +162,14 @@ class BatteryService : Service() {
 
     private fun startBlinking(profile: GlyphProfile) {
         blinkJob?.cancel()
+
+        if (wakeLock == null) {
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BatteryGlyph:Blinking")
+            // Use a 12 hour timeout as a safety measure
+            wakeLock?.acquire(12 * 60 * 60 * 1000L)
+        }
+
         blinkJob = serviceScope.launch {
             while (isActive) {
                 repeat(profile.repeatCount) {
@@ -178,6 +188,12 @@ class BatteryService : Service() {
     private fun stopBlinking() {
         blinkJob?.cancel()
         blinkJob = null
+
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+        }
+        wakeLock = null
+
         glyphManager.toggleRedLed(false)
     }
 
